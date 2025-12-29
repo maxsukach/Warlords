@@ -78,8 +78,13 @@ export default function Home() {
   const [aiThinking, setAiThinking] = useState(false);
   const [showInstallHint, setShowInstallHint] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
+  // 1. Initial Mount & Game Setup
   useEffect(() => {
+    setIsMounted(true);
+    dispatch({ type: 'RESET_GAME' });
+
     const dismissed = localStorage.getItem("warlords_install_hint_dismissed") === "1";
     if (dismissed) return;
 
@@ -94,7 +99,7 @@ export default function Home() {
 
   // AI Main Turn Loop (Choosing Action, Declaring Attack/Scout)
   useEffect(() => {
-    if (state.gameStatus === "GAME_OVER") return;
+    if (!isMounted || state.turn === 0 || state.gameStatus === "GAME_OVER") return;
     if (state.activePlayer !== 'AI') {
       setAiThinking(false);
       return;
@@ -134,11 +139,11 @@ export default function Home() {
       }, AI_THINK_MS * 2);
       return () => clearTimeout(t1);
     }
-  }, [state.activePlayer, state.phase, state.handAi, state.gameStatus, state.reveal]);
+  }, [state.activePlayer, state.phase, state.handAi, state.gameStatus, state.reveal, state.turn, isMounted]);
 
   // AI Defense Loop (When player attacks AI)
   useEffect(() => {
-    if (state.gameStatus === "GAME_OVER" || state.reveal) return;
+    if (!isMounted || state.turn === 0 || state.gameStatus === "GAME_OVER" || state.reveal) return;
     const isAiDefending = state.phase === "DEFENSE_DECLARE" && state.activePlayer === "YOU";
     if (!isAiDefending) return;
 
@@ -156,11 +161,11 @@ export default function Home() {
     }, AI_THINK_MS * 2);
 
     return () => clearTimeout(t);
-  }, [state.phase, state.activePlayer, state.handAi, state.committedAttackCards.length, state.gameStatus, state.reveal]);
+  }, [state.phase, state.activePlayer, state.handAi, state.committedAttackCards.length, state.gameStatus, state.reveal, isMounted, state.turn]);
 
   // Turn Auto-advance Loop
   useEffect(() => {
-    if (state.gameStatus === "GAME_OVER" || state.reveal) return;
+    if (!isMounted || state.turn === 0 || state.gameStatus === "GAME_OVER" || state.reveal) return;
     if (state.phase !== "END_TURN") return;
 
     const t = setTimeout(() => {
@@ -168,11 +173,11 @@ export default function Home() {
     }, AI_THINK_MS * 1.5);
 
     return () => clearTimeout(t);
-  }, [state.phase, state.activePlayer, state.gameStatus, state.reveal]);
+  }, [state.phase, state.activePlayer, state.gameStatus, state.reveal, isMounted, state.turn]);
 
   // Combat Resolution Loop
   useEffect(() => {
-    if (state.gameStatus === "GAME_OVER" || state.reveal) return;
+    if (!isMounted || state.turn === 0 || state.gameStatus === "GAME_OVER" || state.reveal) return;
     if (state.phase !== "COMBAT_RESOLUTION") return;
 
     const t = setTimeout(() => {
@@ -180,17 +185,21 @@ export default function Home() {
     }, AI_THINK_MS * 2);
 
     return () => clearTimeout(t);
-  }, [state.phase, state.gameStatus, state.reveal]);
+  }, [state.phase, state.gameStatus, state.reveal, isMounted, state.turn]);
 
   // Invariant Check after each NEXT_TURN
   useEffect(() => {
-    if (state.phase === "SELECT_ACTION") {
+    if (isMounted && state.turn > 0 && state.phase === "SELECT_ACTION") {
       const inv = checkInvariants(state);
       if (!inv.passed) {
         console.error("Invariant check failed:", inv.errors);
       }
     }
-  }, [state.turn, state.phase]);
+  }, [state.turn, state.phase, isMounted]);
+
+  if (!isMounted) {
+    return <main className="min-h-screen w-full bg-neutral-950" />;
+  }
 
   const runFastTest = () => {
     console.log("FAST TEST CLICK", {phase: state.phase, activePlayer: state.activePlayer});

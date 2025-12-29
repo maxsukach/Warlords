@@ -215,8 +215,8 @@ export function checkInvariants(state: State): { passed: boolean; errors: string
 /**
  * INITIAL STATE
  */
-function initGame(): State {
-  let seed = Math.floor(Math.random() * 1000000);
+export function initGame(): State {
+  const seed = Math.floor(Math.random() * 1000000);
   const initialDeckYou = createDeck("YOU");
   const initialDeckAi = createDeck("AI");
 
@@ -224,7 +224,7 @@ function initGame(): State {
   const { shuffled: sDeckAi, nextSeed: s2 } = shuffle(initialDeckAi, s1);
 
   const resYou = drawCards(sDeckYou, [], [], HAND_LIMIT, s2);
-  const resAi = drawCards(resYou.nextDeck, [], [], HAND_LIMIT, resYou.nextSeed);
+  const resAi = drawCards(sDeckAi, [], [], HAND_LIMIT, resYou.nextSeed);
 
   return {
     turn: 1,
@@ -256,7 +256,38 @@ function initGame(): State {
   };
 }
 
-export const initialState: State = initGame();
+/**
+ * Static initial state to prevent hydration mismatch.
+ * The game will be initialized on the client.
+ */
+export const initialState: State = {
+  turn: 0,
+  activePlayer: "YOU",
+  phase: "SELECT_ACTION",
+  deckYou: [],
+  deckAi: [],
+  handYou: [],
+  handAi: [],
+  discardYou: [],
+  discardAi: [],
+  committedAttackCards: [],
+  committedDefenseCards: [],
+  selectedAttackIds: [],
+  selectedDefenseIds: [],
+  hpYou: STARTING_HP,
+  hpAi: STARTING_HP,
+  gameStatus: "PLAYING",
+  winner: null,
+  reveal: null,
+  combatLog: ["Loading..."],
+  rngSeed: 0,
+  metrics: {
+    totalDrawsYou: 0,
+    totalDrawsAi: 0,
+    totalReshufflesYou: 0,
+    totalReshufflesAi: 0,
+  },
+};
 
 /**
  * REDUCER
@@ -375,16 +406,12 @@ export function reducer(state: State, action: Action): State {
 
       const names = committed.map(c => c.name).join(", ");
       const attackerName = state.activePlayer === "YOU" ? "YOU" : "AI";
-      const nextDiscardAttacker = [...(state.activePlayer === "YOU" ? state.discardYou : state.discardAi)];
-      nextDiscardAttacker.push(...committed);
 
       return {
         ...state,
         phase: "DEFENSE_DECLARE",
         handYou: state.activePlayer === "YOU" ? remainingHand : state.handYou,
         handAi: state.activePlayer === "AI" ? remainingHand : state.handAi,
-        discardYou: state.activePlayer === "YOU" ? nextDiscardAttacker : state.discardYou,
-        discardAi: state.activePlayer === "AI" ? nextDiscardAttacker : state.discardAi,
         committedAttackCards: committed,
         selectedAttackIds: [],
         combatLog: clampLog([`${attackerName} attacks with: ${names}`, ...state.combatLog]),
@@ -410,16 +437,11 @@ export function reducer(state: State, action: Action): State {
       const names = committed.length > 0 ? committed.map(c => c.name).join(", ") : "no units";
       const defenderName = state.activePlayer === "YOU" ? "AI" : "YOU";
 
-      const nextDiscardDefender = [...(state.activePlayer === "YOU" ? state.discardAi : state.discardYou)];
-      nextDiscardDefender.push(...committed);
-
       return {
         ...state,
         phase: "COMBAT_RESOLUTION",
         handYou: state.activePlayer === "YOU" ? state.handYou : remainingHand,
         handAi: state.activePlayer === "AI" ? state.handAi : remainingHand,
-        discardYou: state.activePlayer === "YOU" ? state.discardYou : nextDiscardDefender,
-        discardAi: state.activePlayer === "AI" ? state.discardAi : nextDiscardDefender,
         committedDefenseCards: committed,
         selectedDefenseIds: [],
         combatLog: clampLog([`${defenderName} defends with: ${names}`, ...state.combatLog]),
@@ -463,6 +485,18 @@ export function reducer(state: State, action: Action): State {
         lines.unshift("War is over — YOU win.");
       }
 
+      const nextDiscardYou = [...state.discardYou];
+      const nextDiscardAi = [...state.discardAi];
+      
+      state.committedAttackCards.forEach(c => {
+        if (c.owner === "YOU") nextDiscardYou.push(c);
+        else nextDiscardAi.push(c);
+      });
+      state.committedDefenseCards.forEach(c => {
+        if (c.owner === "YOU") nextDiscardYou.push(c);
+        else nextDiscardAi.push(c);
+      });
+
       return {
         ...state,
         phase: "END_TURN",
@@ -470,6 +504,8 @@ export function reducer(state: State, action: Action): State {
         hpAi: nextHpAi,
         gameStatus: nextStatus,
         winner: nextWinner,
+        discardYou: nextDiscardYou,
+        discardAi: nextDiscardAi,
         committedAttackCards: [],
         committedDefenseCards: [],
         combatLog: clampLog([...lines, ...state.combatLog]),
