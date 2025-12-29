@@ -8,5 +8,8 @@
         "experimental:mcp"
       ]
     }
+  },
+  "enabledTools": {
+    "firebase": []
   }
 }
