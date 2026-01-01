@@ -1,0 +1,101 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.35));
+  padding: 8px;
+  color: white;
+  text-align: left;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.card:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.selected {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+
+.unit {
+  font-weight: 800;
+}
+
+.power {
+  font-weight: 900;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.artWrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.art {
+  object-fit: cover;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 3/4;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.placeholderText {
+  font-size: 18px;
+  font-weight: 900;
+  opacity: 0.4;
+}
+
+.name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact {
+  width: 80px;
+}
+
+.medium {
+  width: 100px;
+}
+
+.large {
+  width: 120px;
+  padding: 10px;
+}
