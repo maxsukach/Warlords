@@ -3,9 +3,16 @@ import { describe, expect, it } from "vitest";
 import { HAND_LIMIT, STARTING_HP, type GameState, type Card } from "./gameState";
 import { getAllowedActions, transition } from "./stateMachine";
 
-function createCard(owner: "YOU" | "AI", idSuffix: string, power = 2, type: Card["type"] = "INFANTRY"): Card {
+function createCard(
+  owner: "YOU" | "AI",
+  idSuffix: string,
+  power = 2,
+  type: Card["type"] = "INFANTRY",
+  cardId: Card["cardId"] = "cossacks_infantry_basic"
+): Card {
   return {
     id: `${owner}-${idSuffix}`,
+    cardId,
     name: `${type}-${idSuffix}`,
     power,
     type,

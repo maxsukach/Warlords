@@ -7,25 +7,14 @@ import { reducer } from '@/game/stateMachine';
 import { DEFAULT_SETTINGS, getSettings, type Settings } from '@/app/settings/model';
 import { CardView } from '@/components/CardView/CardView';
 import { CardView as DemoCardView } from '@/components/game/CardView';
-import { getCardById } from '@/domain/cards';
-
-const UNIT_CARD_ID: Record<Card["type"], string> = {
-  INFANTRY: "cossacks_infantry_basic",
-  ARCHER: "cossacks_archer_basic",
-  CAVALRY: "cossacks_cavalry_basic",
-  SIEGE: "cossacks_siege_cannon_basic",
-  SCOUT: "cossacks_scout_basic",
-  LEADER: "cossacks_leader_basic",
-  FORT: "cossacks_fort_basic",
-};
+import { getCardDef, type CardId } from '@/domain/cards';
 
 function cardToDefinition(card: Card) {
-  const id = UNIT_CARD_ID[card.type];
   try {
-    return getCardById(id);
+    return getCardDef(card.cardId);
   } catch (e) {
     if (process.env.NODE_ENV !== "production") {
-      console.warn("Missing CardDefinition for", id, e);
+      console.warn("Missing CardDefinition for", card.cardId, e);
     }
     return null;
   }
@@ -288,11 +277,11 @@ export default function Home() {
   const youAreAttacker = state.phase === "ATTACK_DECLARE" && state.activePlayer === "YOU";
   const youAreDefender = state.phase === "DEFENSE_DECLARE" && state.activePlayer === "AI";
 
-  const demoHand = [
-    { faction: "cossacks", kind: "infantry", state: "idle" as const },
-    { faction: "cossacks", kind: "archer", state: "selected" as const },
-    { faction: "cossacks", kind: "cavalry", state: "attacking" as const },
-    { faction: "cossacks", kind: "scout", state: "idle" as const },
+  const demoHand: Array<{ cardId: CardId; state: "idle" | "selected" | "attacking" }> = [
+    { cardId: "cossacks_infantry_basic", state: "idle" },
+    { cardId: "cossacks_archer_basic", state: "selected" },
+    { cardId: "cossacks_cavalry_basic", state: "attacking" },
+    { cardId: "cossacks_scout_basic", state: "idle" },
   ];
 
   return (
@@ -576,12 +565,10 @@ export default function Home() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <div className="text-[10px] uppercase tracking-wider font-black opacity-40 mb-2">Demo Hand (Static)</div>
             <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-              {demoHand.map((c, idx) => (
+              {demoHand.map((c) => (
                 <DemoCardView
-                  key={idx}
-                  faction={c.faction}
-                  kind={c.kind as any}
-                  variant="basic"
+                  key={c.cardId}
+                  cardId={c.cardId}
                   state={c.state}
                 />
               ))}

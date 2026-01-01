@@ -2,11 +2,16 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import SwRegister from "./SwRegister";
+import { validateCardRegistry } from "@/domain/cards";
 
 export const metadata: Metadata = {
   title: "Warlords",
   description: "Turn-based card strategy game",
 };
+
+if (process.env.NODE_ENV !== "production") {
+  validateCardRegistry();
+}
 
 export default function RootLayout({
   children,

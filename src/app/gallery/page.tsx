@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CARD_REGISTRY, getCardsByFaction, getCardArtUrl, type CardDefinition, type Faction } from "@/domain/cards";
+import {
+  getCardArtCandidates,
+  getCardArtUrl,
+  listCardsByFaction,
+  type CardDefinition,
+  type Faction,
+} from "@/domain/cards";
 
 export default function GalleryPage() {
   const [mounted, setMounted] = useState(false);
@@ -14,10 +20,10 @@ export default function GalleryPage() {
   }, []);
 
   const rows = useMemo(() => {
-    const factions: Faction[] = ["COSSACKS", "TATARS", "POLAND"];
+    const factions: Faction[] = ["COSSACKS", "TATARS", "POLAND", "MUSCOVY", "NEUTRAL"];
     return factions.map((faction) => ({
       faction,
-      defs: getCardsByFaction(faction),
+      defs: listCardsByFaction(faction),
     }));
   }, [refresh]);
 
@@ -74,12 +80,8 @@ type AssetRowProps = {
 function AssetRow({ def }: AssetRowProps) {
   const [status, setStatus] = useState<"PENDING" | "FOUND" | "MISSING">("PENDING");
   const [sourceIndex, setSourceIndex] = useState(0);
-
-  const sources = [
-    getCardArtUrl(def.art, { preferredExt: "webp", fallbackExts: ["png"], faction: def.faction }),
-    getCardArtUrl(def.art, { preferredExt: "png", faction: def.faction }),
-  ];
-  const src = sources[sourceIndex] ?? getCardArtUrl(def.art, { preferredExt: "png", faction: def.faction });
+  const sources = getCardArtCandidates(def.id);
+  const src = getCardArtUrl(def.id, { attempt: sourceIndex });
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
@@ -92,17 +94,16 @@ function AssetRow({ def }: AssetRowProps) {
         {status === "PENDING" ? "LOADING" : status}
       </div>
       <div className="flex-1">
-        <div className="text-sm font-semibold">{def.label || def.id}</div>
-        <div className="text-[10px] uppercase tracking-wider opacity-50">{def.faction} • {def.unitType} • {def.tier}</div>
+        <div className="text-sm font-semibold">{def.displayName ?? def.id}</div>
+        <div className="text-[10px] uppercase tracking-wider opacity-50">{def.faction} • {def.unitType} • {def.kind}</div>
       </div>
       <div className="h-16 w-12 overflow-hidden rounded-lg bg-black/30 border border-white/10 shadow">
         <AssetThumb
           src={src}
-          fallbackSrc={getCardArtUrl(def.art, { preferredExt: "png", faction: def.faction })}
           onFound={() => setStatus("FOUND")}
           onMissing={() => setStatus("MISSING")}
-          onFallback={() => setSourceIndex(1)}
-          isFallback={sourceIndex === 1}
+          onFallback={() => setSourceIndex((prev) => Math.min(prev + 1, sources.length - 1))}
+          isFallback={sourceIndex >= sources.length - 1}
         />
       </div>
     </div>
@@ -111,32 +112,36 @@ function AssetRow({ def }: AssetRowProps) {
 
 function AssetThumb({
   src,
-  fallbackSrc,
   onFound,
   onMissing,
   onFallback,
   isFallback,
 }: {
   src: string;
-  fallbackSrc: string;
   onFound: () => void;
   onMissing: () => void;
   onFallback: () => void;
   isFallback: boolean;
 }) {
-  // First try WEBP, then fall back to PNG; mark missing if both fail.
+  // Try candidates in order; mark missing if all fail.
   return (
-    <img
-      key={src}
-      src={src}
-      alt="Card art"
-      className="h-full w-full object-cover"
-      onLoad={onFound}
-      onError={() => {
-        if (!isFallback) {
-          onFallback();
-        } else {
-          onMissing();
+      <img
+        key={src}
+        src={src}
+        alt="Card art"
+        className="h-full w-full object-cover"
+        onLoad={() => {
+          if (isFallback) {
+            onMissing();
+          } else {
+            onFound();
+          }
+        }}
+        onError={() => {
+          if (!isFallback) {
+            onFallback();
+          } else {
+            onMissing();
         }
       }}
     />

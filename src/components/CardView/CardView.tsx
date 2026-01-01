@@ -1,9 +1,9 @@
 'use client';
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./CardView.module.css";
-import { getCardArtUrl, getCardById, type CardDefinition } from "@/domain/cards";
+import { getCardArtCandidates, getCardArtUrl, getCardDef, type CardDefinition } from "@/domain/cards";
 
 type Size = "compact" | "medium" | "large";
 
@@ -38,13 +38,14 @@ export function CardView(props: CardViewProps) {
     showPower = true,
     className = "",
   } = props;
-  const [artFailed, setArtFailed] = useState(false);
+  const [artAttempt, setArtAttempt] = useState(0);
+  const [imgFailed, setImgFailed] = useState(false);
   let cardDef = props.card ?? null;
   const warnedMissing = CardViewWarnings;
 
   if (!cardDef && cardId) {
     try {
-      cardDef = getCardById(cardId);
+      cardDef = getCardDef(cardId);
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         const key = `missing-cardid:${cardId}`;
@@ -55,6 +56,13 @@ export function CardView(props: CardViewProps) {
       }
     }
   }
+
+  const resetKey = cardDef?.id ?? cardId ?? "unknown";
+
+  useEffect(() => {
+    setArtAttempt(0);
+    setImgFailed(false);
+  }, [resetKey]);
 
   if (!cardDef) {
     if (process.env.NODE_ENV !== "production") {
@@ -81,21 +89,18 @@ export function CardView(props: CardViewProps) {
 
   if (process.env.NODE_ENV !== "production") {
     const key = cardDef.id ?? "unknown-card";
-    if ((!cardDef.art?.fileBase || !cardDef.faction) && !warnedMissing.has(key)) {
+    if ((!cardDef.art?.baseName || !cardDef.art?.folder) && !warnedMissing.has(key)) {
       console.warn("CardView missing art config for card:", cardDef);
       warnedMissing.add(key);
     }
   }
 
-  const name = cardDef.name;
+  const name = cardDef.displayName ?? cardDef.shortName ?? cardDef.id;
   const power = powerOverride ?? cardDef.power;
   const unitType = cardDef.unitType;
-  const artUrl = getCardArtUrl(cardDef.art, {
-    preferredExt: artFailed ? "png" : cardDef.art?.preferredExt ?? "png",
-    fallbackExts: ["png"],
-    faction: cardDef.faction,
-  });
-  const useArt = !!artUrl && !artFailed;
+  const artCandidates = getCardArtCandidates(cardDef.id);
+  const artUrl = getCardArtUrl(cardDef.id, { attempt: artAttempt });
+  const useArt = !!artUrl && !imgFailed;
 
   return (
     <button
@@ -123,9 +128,14 @@ export function CardView(props: CardViewProps) {
               alt={name}
               fill
               sizes="(max-width: 480px) 80px, 120px"
-        className={styles.art}
+              className={styles.art}
+              unoptimized
               onError={() => {
-                setArtFailed(true);
+                if (artAttempt < artCandidates.length - 1) {
+                  setArtAttempt((prev) => prev + 1);
+                } else {
+                  setImgFailed(true);
+                }
               }}
             />
           </div>

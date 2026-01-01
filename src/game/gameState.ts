@@ -1,4 +1,4 @@
-import type { UnitType as CardUnitType } from "./cards/types";
+import { listCardsByFaction, type CardId, type Faction, type UnitType } from "@/domain/cards";
 
 /** 
  * CONSTANTS 
@@ -6,14 +6,15 @@ import type { UnitType as CardUnitType } from "./cards/types";
 export const HAND_LIMIT = 6 as const;
 export const STARTING_HP = 20 as const;
 export const AI_THINK_MS = 600 as const;
-export const CARDS_PER_PLAYER = 18 as const;
+
+const DEFAULT_DECK_FACTION: Faction = "COSSACKS";
+const DEFAULT_DECK = listCardsByFaction(DEFAULT_DECK_FACTION).filter((def) => (def.deckCount ?? 0) > 0);
+export const CARDS_PER_PLAYER = DEFAULT_DECK.reduce((sum, def) => sum + (def.deckCount ?? 0), 0);
 
 /**
  * TYPES
  */
 export type Player = "YOU" | "AI";
-export type UnitType = CardUnitType;
-
 export type Phase =
   | "SELECT_ACTION"
   | "ATTACK_DECLARE"
@@ -23,6 +24,7 @@ export type Phase =
 
 export type Card = {
   id: string;
+  cardId: CardId;
   name: string;
   power: number;
   type: UnitType;
@@ -92,22 +94,16 @@ export function shuffle<T>(array: T[], seed: number): { shuffled: T[]; nextSeed:
 
 function createDeck(owner: Player): Card[] {
   const deck: Card[] = [];
-  const catalog: { type: UnitType; name: string; power: number; count: number; prefix: string }[] = [
-    { type: "INFANTRY", name: "Infantry", power: 2, count: 6, prefix: "inf" },
-    { type: "ARCHER", name: "Archer", power: 2, count: 4, prefix: "arc" },
-    { type: "CAVALRY", name: "Cavalry", power: 3, count: 4, prefix: "cav" },
-    { type: "SIEGE", name: "Siege Engine", power: 4, count: 2, prefix: "sie" },
-    { type: "SCOUT", name: "Scout", power: 1, count: 2, prefix: "sco" },
-  ];
-
-  catalog.forEach((item) => {
-    for (let i = 1; i <= item.count; i++) {
+  DEFAULT_DECK.forEach((def) => {
+    const count = def.deckCount ?? 0;
+    for (let i = 1; i <= count; i++) {
       deck.push({
-        id: `${owner}-${item.prefix}-${i.toString().padStart(2, '0')}`,
-        name: item.name,
-        power: item.power,
-        type: item.type,
-        owner: owner,
+        id: `${owner}-${def.id}-${i.toString().padStart(2, "0")}`,
+        cardId: def.id,
+        name: def.displayName ?? def.shortName ?? def.id,
+        power: def.power ?? 0,
+        type: def.unitType,
+        owner,
       });
     }
   });

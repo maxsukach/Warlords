@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_REGISTRY, getCardArtUrl, getCardById, makeCardId } from "./index";
+import { CARD_REGISTRY, getCardArtUrl, getCardDef, makeCardId, PLACEHOLDER_ART } from "./index";
 
 describe("card contract", () => {
   it("makeCardId builds expected slug", () => {
@@ -8,24 +8,21 @@ describe("card contract", () => {
   });
 
   it("getCardArtUrl builds expected path", () => {
-    const card = getCardById("cossacks_infantry_basic");
-    expect(getCardArtUrl(card.art, { preferredExt: "png", faction: card.faction })).toBe("/cards/cossacks/infantry_basic.png");
-    expect(getCardArtUrl(card.art, { faction: card.faction })).toBe("/cards/cossacks/infantry_basic.png");
+    const card = getCardDef("cossacks_infantry_basic");
+    expect(getCardArtUrl(card.id)).toBe("/cards/cossacks/infantry_basic.png");
   });
 
   it("getCardArtUrl handles missing card safely", () => {
-    expect(getCardArtUrl(undefined)).toBe("/cards/_missing.png");
-    expect(getCardArtUrl(null)).toBe("/cards/_missing.png");
-    expect(getCardArtUrl({ fileBase: "x/y", preferredExt: "png", faction: "cossacks" }, { preferredExt: "png" })).toBe("/cards/cossacks/x/y.png");
+    expect(getCardArtUrl("missing_card")).toBe(PLACEHOLDER_ART);
   });
 
   it("registry contains unique ids", () => {
-    const ids = CARD_REGISTRY.map((c) => c.id);
+    const ids = Object.keys(CARD_REGISTRY);
     const unique = new Set(ids);
     expect(unique.size).toBe(ids.length);
   });
 
-  it("getCardById throws on unknown id", () => {
-    expect(() => getCardById("missing_card")).toThrow();
+  it("getCardDef throws on unknown id", () => {
+    expect(() => getCardDef("missing_card")).toThrow();
   });
 });

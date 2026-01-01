@@ -1,25 +1,47 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import styles from "./CardView.module.css";
-import { getCardArtUrl, type CardDefinition } from "@/domain/cards";
+import { getCardArtCandidates, getCardArtUrl, getCardDef, type CardDefinition, type CardId } from "@/domain/cards";
 
-export type Faction = "cossacks" | "poles" | "tatars" | "moscovites";
-export type Kind = "infantry" | "archer" | "cavalry" | "scout" | "siege" | "fort" | "leader";
-export type Variant = "basic";
 export type CardState = "idle" | "selected" | "attacking" | "disabled";
 
 type Props = {
-  faction: Faction;
-  kind: Kind;
-  variant: Variant;
+  cardId: CardId;
   state?: CardState;
   onClick?: () => void;
 };
 
-export function CardView({ faction, kind, variant, state = "idle", onClick }: Props) {
-  const art: CardDefinition["art"] = { fileBase: `${kind}_${variant}`, preferredExt: "png", faction };
-  const imgSrc = getCardArtUrl(art, { preferredExt: "png", faction });
-  const name = `${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${variant})`;
+export function CardView({ cardId, state = "idle", onClick }: Props) {
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    setAttempt(0);
+  }, [cardId]);
+  let def: CardDefinition | null = null;
+  try {
+    def = getCardDef(cardId);
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Demo CardView missing registry entry:", cardId, error);
+    }
+  }
+  if (!def) {
+    return (
+      <button type="button" className={[styles.card, styles.idle].join(" ")} disabled>
+        <div className={styles.header}>
+          <span>unknown</span>
+          <span>basic</span>
+        </div>
+        <div className={styles.body}>
+          <div className={styles.imgWrap} />
+          <div className={styles.name}>Unknown</div>
+        </div>
+      </button>
+    );
+  }
+  const artCandidates = getCardArtCandidates(cardId);
+  const imgSrc = getCardArtUrl(cardId, { attempt });
+  const name = def.displayName ?? def.shortName ?? def.id;
 
   const stateClass =
     state === "selected"
@@ -39,12 +61,21 @@ export function CardView({ faction, kind, variant, state = "idle", onClick }: Pr
       title={name}
     >
       <div className={styles.header}>
-        <span>{kind}</span>
-        <span>{variant}</span>
+        <span>{def.unitType.toLowerCase()}</span>
+        <span>{(def.rarity ?? "basic").toString().toLowerCase()}</span>
       </div>
       <div className={styles.body}>
         <div className={styles.imgWrap}>
-          <img src={imgSrc} alt={name} className={styles.img} />
+          <img
+            src={imgSrc}
+            alt={name}
+            className={styles.img}
+            onError={() => {
+              if (attempt < artCandidates.length - 1) {
+                setAttempt((prev) => prev + 1);
+              }
+            }}
+          />
         </div>
         <div className={styles.name}>{name}</div>
       </div>
