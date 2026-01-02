@@ -1,5 +1,6 @@
-import { buildFactionDeck, type CardInstance } from "@/lib/cards/instances";
+import { type CardInstance } from "@/lib/cards/instances";
 import { type Faction } from "@/lib/cards/catalog";
+import { createDeck, drawCards, shuffle } from "@/lib/game/deck";
 
 /** 
  * CONSTANTS 
@@ -17,11 +18,14 @@ export const CARDS_PER_PLAYER = 18 as const;
 export type Player = "YOU" | "AI";
 export type GameStatus = "PLAYING" | "GAME_OVER";
 export type Phase =
+  | "TURN_START"
+  | "DRAW"
   | "SELECT_ACTION"
   | "ATTACK_DECLARE"
   | "DEFENSE_DECLARE"
   | "COMBAT_RESOLUTION"
-  | "END_TURN";
+  | "END_TURN"
+  | "GAME_OVER";
 
 export type Card = CardInstance;
 
@@ -48,6 +52,7 @@ export type GameState = {
 
   gameStatus: GameStatus;
   winner: Player | null;
+  matchResult: "YOU_WIN" | "AI_WIN" | "DRAW" | null;
 
   reveal: {
     visible: boolean;
@@ -69,67 +74,13 @@ export type GameState = {
 /**
  * UTILS
  */
-function seededRandom(seed: number) {
-  const x = Math.sin(seed++) * 10000;
-  return { val: x - Math.floor(x), nextSeed: seed };
-}
-
-export function shuffle<T>(array: T[], seed: number): { shuffled: T[]; nextSeed: number } {
-  let currSeed = seed;
-  const result = [...array];
-  for (let i = result.length - 1; i > 0; i--) {
-    const { val, nextSeed } = seededRandom(currSeed);
-    currSeed = nextSeed;
-    const j = Math.floor(val * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return { shuffled: result, nextSeed: currSeed };
-}
-
-function createDeck(owner: Player): Card[] {
-  return buildFactionDeck(DEFAULT_DECK_FACTION, owner);
-}
-
-export function drawCards(deck: Card[], hand: Card[], discard: Card[], limit: number, seed: number): { 
-  nextDeck: Card[]; 
-  nextHand: Card[]; 
-  nextDiscard: Card[]; 
-  drawnCount: number; 
-  reshuffles: number;
-  nextSeed: number; 
-  logEntries: string[] 
-} {
-  const needed = limit - hand.length;
-  if (needed <= 0) return { nextDeck: deck, nextHand: hand, nextDiscard: discard, drawnCount: 0, reshuffles: 0, nextSeed: seed, logEntries: [] };
-  
-  let currDeck = [...deck];
-  let currDiscard = [...discard];
-  const currHand = [...hand];
-  let currSeed = seed;
-  let drawnCount = 0;
-  let reshuffles = 0;
-  const logEntries: string[] = [];
-
-  for (let i = 0; i < needed; i++) {
-    if (currDeck.length === 0) {
-      if (currDiscard.length === 0) break;
-      const { shuffled, nextSeed } = shuffle(currDiscard, currSeed);
-      currDeck = shuffled;
-      currDiscard = [];
-      currSeed = nextSeed;
-      reshuffles++;
-      logEntries.push("Deck empty. Reshuffling discard pile.");
-    }
-    const card = currDeck.shift()!;
-    currHand.push(card);
-    drawnCount++;
-  }
-
-  return { nextDeck: currDeck, nextHand: currHand, nextDiscard: currDiscard, drawnCount, reshuffles, nextSeed: currSeed, logEntries };
-}
 
 export function phaseLabel(phase: Phase) {
   switch (phase) {
+    case "TURN_START":
+      return "Turn start";
+    case "DRAW":
+      return "Draw";
     case "SELECT_ACTION":
       return "Select action";
     case "ATTACK_DECLARE":
@@ -140,6 +91,8 @@ export function phaseLabel(phase: Phase) {
       return "Combat";
     case "END_TURN":
       return "End turn";
+    case "GAME_OVER":
+      return "Game over";
   }
 }
 
@@ -183,8 +136,8 @@ export function checkInvariants(state: GameState): { passed: boolean; errors: st
  */
 export function initGame(): GameState {
   const seed = Math.floor(Math.random() * 1000000);
-  const initialDeckYou = createDeck("YOU");
-  const initialDeckAi = createDeck("AI");
+  const initialDeckYou = createDeck(DEFAULT_DECK_FACTION, "YOU");
+  const initialDeckAi = createDeck(DEFAULT_DECK_FACTION, "AI");
 
   const { shuffled: sDeckYou, nextSeed: s1 } = shuffle(initialDeckYou, seed);
   const { shuffled: sDeckAi, nextSeed: s2 } = shuffle(initialDeckAi, s1);
@@ -206,20 +159,25 @@ export function initGame(): GameState {
     committedDefenseCards: [],
     selectedAttackIds: [],
     selectedDefenseIds: [],
-    hpYou: STARTING_HP,
-    hpAi: STARTING_HP,
-    gameStatus: "PLAYING",
-    winner: null,
-    reveal: null,
-    combatLog: ["Game Started.", `YOU drew ${resYou.drawnCount} units.`, `AI drew ${resAi.drawnCount} units.`],
-    rngSeed: resAi.nextSeed,
-    metrics: {
-      totalDrawsYou: resYou.drawnCount,
+  hpYou: STARTING_HP,
+  hpAi: STARTING_HP,
+  gameStatus: "PLAYING",
+  winner: null,
+  matchResult: null,
+  reveal: null,
+  combatLog: ["Game Started.", `YOU drew ${resYou.drawnCount} units.`, `AI drew ${resAi.drawnCount} units.`],
+  rngSeed: resAi.nextSeed,
+  metrics: {
+    totalDrawsYou: resYou.drawnCount,
       totalDrawsAi: resAi.drawnCount,
       totalReshufflesYou: resYou.reshuffles,
       totalReshufflesAi: resAi.reshuffles,
     },
   };
+}
+
+export function resetMatch(): GameState {
+  return initGame();
 }
 
 /**
@@ -244,6 +202,7 @@ export const initialState: GameState = {
   hpAi: STARTING_HP,
   gameStatus: "PLAYING",
   winner: null,
+  matchResult: null,
   reveal: null,
   combatLog: ["Loading..."],
   rngSeed: 0,

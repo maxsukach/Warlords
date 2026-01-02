@@ -8,6 +8,7 @@ import {
 } from "./cardArtRegistry";
 
 const DEFAULT_EXTS: CardArtExt[] = ["webp", "png", "jpg"];
+const warnedMissingKeys = new Set<string>();
 
 function unique<T>(items: T[]): T[] {
   const seen = new Set<T>();
@@ -30,6 +31,13 @@ export function getCardArtCandidates(faction: Faction, unit: UnitKey): string[] 
   const spec = CARD_ART[faction]?.[unit];
   const key = spec?.key?.trim();
   if (!key) {
+    if (process.env.NODE_ENV !== "production") {
+      const warnKey = `${faction}:${unit}`;
+      if (!warnedMissingKeys.has(warnKey)) {
+        console.warn(`[card-art] Missing mapping for ${warnKey}, using placeholder.`);
+        warnedMissingKeys.add(warnKey);
+      }
+    }
     return unique([PLACEHOLDER, PLACEHOLDER_FALLBACK]);
   }
 

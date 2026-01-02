@@ -1,6 +1,9 @@
-import { HAND_LIMIT, clampLog, drawCards, initGame, shuffle } from "./gameState";
+import { HAND_LIMIT, clampLog, initGame, resetMatch } from "./gameState";
 import type { Card, GameState, GameStatus, Phase, Player } from "./gameState";
 import { resolveDef } from "@/lib/cards/resolve";
+import { drawCards, shuffle } from "@/lib/game/deck";
+import { endTurn } from "@/lib/game/turn";
+import { checkMatchEnd } from "@/lib/game/endConditions";
 
 export type { GameState, Phase } from "./gameState";
 
@@ -14,7 +17,9 @@ export type GameActionType =
   | "RESOLVE_COMBAT"
   | "NEXT_TURN"
   | "CLOSE_REVEAL"
-  | "RESET_GAME";
+  | "RESET_GAME"
+  | "DEBUG_DRAW_ONE"
+  | "DEBUG_FORCE_END_TURN";
 
 export type GameAction =
   | { type: "SELECT_ATTACK" }
@@ -26,7 +31,9 @@ export type GameAction =
   | { type: "RESOLVE_COMBAT" }
   | { type: "NEXT_TURN" }
   | { type: "CLOSE_REVEAL" }
-  | { type: "RESET_GAME" };
+  | { type: "RESET_GAME" }
+  | { type: "DEBUG_DRAW_ONE" }
+  | { type: "DEBUG_FORCE_END_TURN" };
 
 function appendLog(state: GameState, entry: string): GameState {
   return { ...state, combatLog: clampLog([entry, ...state.combatLog]) };
@@ -42,10 +49,13 @@ function defenderFor(attacker: Player): Player {
 }
 
 export function getAllowedActions(state: GameState): GameActionType[] {
-  if (state.gameStatus === "GAME_OVER") return [];
+  if (state.gameStatus === "GAME_OVER" || state.phase === "GAME_OVER") return [];
   if (state.reveal) return ["CLOSE_REVEAL"];
 
   switch (state.phase) {
+    case "TURN_START":
+    case "DRAW":
+      return [];
     case "SELECT_ACTION":
       return ["SELECT_ATTACK", "SELECT_PASS"];
     case "ATTACK_DECLARE":
@@ -66,6 +76,10 @@ export function getNextPhaseCandidates(state: GameState): Phase[] {
   if (state.gameStatus === "GAME_OVER") return [state.phase];
 
   switch (state.phase) {
+    case "TURN_START":
+      return ["DRAW"];
+    case "DRAW":
+      return ["SELECT_ACTION"];
     case "SELECT_ACTION":
       return ["ATTACK_DECLARE", "END_TURN"];
     case "ATTACK_DECLARE":
@@ -83,6 +97,10 @@ export function getNextPhaseCandidates(state: GameState): Phase[] {
 
 export function transition(state: GameState, action: GameAction): GameState {
   if (state.gameStatus === "GAME_OVER") {
+    return invalidAction(state, action.type, "game over");
+  }
+
+  if (state.phase === "GAME_OVER") {
     return invalidAction(state, action.type, "game over");
   }
 
@@ -257,6 +275,17 @@ export function transition(state: GameState, action: GameAction): GameState {
         lines.unshift("War is over — YOU win.");
       }
 
+      const matchResult = checkMatchEnd({
+        ...state,
+        hpYou: nextHpYou,
+        hpAi: nextHpAi,
+      });
+      if (matchResult && nextStatus !== "GAME_OVER") {
+        nextStatus = "GAME_OVER";
+      }
+      if (matchResult === "YOU_WIN") nextWinner = "YOU";
+      if (matchResult === "AI_WIN") nextWinner = "AI";
+
       const nextDiscardYou = [...state.discardYou];
       const nextDiscardAi = [...state.discardAi];
 
@@ -271,11 +300,12 @@ export function transition(state: GameState, action: GameAction): GameState {
 
       return {
         ...state,
-        phase: "END_TURN",
         hpYou: nextHpYou,
         hpAi: nextHpAi,
         gameStatus: nextStatus,
         winner: nextWinner,
+        matchResult,
+        phase: nextStatus === "GAME_OVER" ? "GAME_OVER" : "END_TURN",
         discardYou: nextDiscardYou,
         discardAi: nextDiscardAi,
         committedAttackCards: [],
@@ -287,67 +317,7 @@ export function transition(state: GameState, action: GameAction): GameState {
     case "NEXT_TURN": {
       if (state.phase !== "END_TURN") return invalidAction(state, action.type);
 
-      const nextPlayer: Player = state.activePlayer === "YOU" ? "AI" : "YOU";
-      const nextTurn = nextPlayer === "YOU" ? state.turn + 1 : state.turn;
-
-      let dYou = state.deckYou;
-      let hYou = state.handYou;
-      let disYou = state.discardYou;
-      let dAi = state.deckAi;
-      let hAi = state.handAi;
-      let disAi = state.discardAi;
-      let seed = state.rngSeed;
-      const logEntries: string[] = [];
-
-      let addedDrawsYou = 0;
-      let addedReshufflesYou = 0;
-      let addedDrawsAi = 0;
-      let addedReshufflesAi = 0;
-
-      if (nextPlayer === "YOU") {
-        const res = drawCards(dYou, hYou, disYou, HAND_LIMIT, seed);
-        dYou = res.nextDeck;
-        hYou = res.nextHand;
-        disYou = res.nextDiscard;
-        seed = res.nextSeed;
-        addedDrawsYou = res.drawnCount;
-        addedReshufflesYou = res.reshuffles;
-        if (res.drawnCount > 0) logEntries.push(`YOU reinforcements: ${res.drawnCount}.`);
-        logEntries.push(...res.logEntries);
-      } else {
-        const res = drawCards(dAi, hAi, disAi, HAND_LIMIT, seed);
-        dAi = res.nextDeck;
-        hAi = res.nextHand;
-        disAi = res.nextDiscard;
-        seed = res.nextSeed;
-        addedDrawsAi = res.drawnCount;
-        addedReshufflesAi = res.reshuffles;
-        if (res.drawnCount > 0) logEntries.push(`AI reinforcements: ${res.drawnCount}.`);
-        logEntries.push(...res.logEntries);
-      }
-
-      return {
-        ...state,
-        turn: nextTurn,
-        activePlayer: nextPlayer,
-        phase: "SELECT_ACTION",
-        deckYou: dYou,
-        handYou: hYou,
-        discardYou: disYou,
-        deckAi: dAi,
-        handAi: hAi,
-        discardAi: disAi,
-        rngSeed: seed,
-        selectedAttackIds: [],
-        selectedDefenseIds: [],
-        combatLog: clampLog([...logEntries, ...state.combatLog]),
-        metrics: {
-          totalDrawsYou: state.metrics.totalDrawsYou + addedDrawsYou,
-          totalDrawsAi: state.metrics.totalDrawsAi + addedDrawsAi,
-          totalReshufflesYou: state.metrics.totalReshufflesYou + addedReshufflesYou,
-          totalReshufflesAi: state.metrics.totalReshufflesAi + addedReshufflesAi,
-        },
-      };
+      return endTurn(state);
     }
 
     case "CLOSE_REVEAL": {
@@ -374,6 +344,54 @@ export function transition(state: GameState, action: GameAction): GameState {
       return invalidAction(state, action.type, "use reducer to reset");
     }
 
+    case "DEBUG_DRAW_ONE": {
+      const isYou = state.activePlayer === "YOU";
+      const deck = isYou ? state.deckYou : state.deckAi;
+      const hand = isYou ? state.handYou : state.handAi;
+      const discard = isYou ? state.discardYou : state.discardAi;
+      const res = drawCards(deck, hand, discard, Math.min(HAND_LIMIT, hand.length + 1), state.rngSeed);
+
+      return {
+        ...state,
+        deckYou: isYou ? res.nextDeck : state.deckYou,
+        handYou: isYou ? res.nextHand : state.handYou,
+        discardYou: isYou ? res.nextDiscard : state.discardYou,
+        deckAi: isYou ? state.deckAi : res.nextDeck,
+        handAi: isYou ? state.handAi : res.nextHand,
+        discardAi: isYou ? state.discardAi : res.nextDiscard,
+        rngSeed: res.nextSeed,
+        combatLog: clampLog([`${isYou ? "YOU" : "AI"} draws a card (debug).`, ...res.logEntries, ...state.combatLog]),
+        metrics: {
+          ...state.metrics,
+          totalDrawsYou: state.metrics.totalDrawsYou + (isYou ? res.drawnCount : 0),
+          totalDrawsAi: state.metrics.totalDrawsAi + (!isYou ? res.drawnCount : 0),
+          totalReshufflesYou: state.metrics.totalReshufflesYou + (isYou ? res.reshuffles : 0),
+          totalReshufflesAi: state.metrics.totalReshufflesAi + (!isYou ? res.reshuffles : 0),
+        },
+      };
+    }
+
+    case "DEBUG_FORCE_END_TURN": {
+      // Move any committed cards to discard so nothing is lost.
+      const nextDiscardYou = [...state.discardYou];
+      const nextDiscardAi = [...state.discardAi];
+      state.committedAttackCards.forEach((c) => (c.owner === "YOU" ? nextDiscardYou : nextDiscardAi).push(c));
+      state.committedDefenseCards.forEach((c) => (c.owner === "YOU" ? nextDiscardYou : nextDiscardAi).push(c));
+
+      const base: GameState = {
+        ...state,
+        phase: "END_TURN",
+        committedAttackCards: [],
+        committedDefenseCards: [],
+        discardYou: nextDiscardYou,
+        discardAi: nextDiscardAi,
+        selectedAttackIds: [],
+        selectedDefenseIds: [],
+      };
+
+      return endTurn(base);
+    }
+
     default:
       return state;
   }
@@ -381,7 +399,7 @@ export function transition(state: GameState, action: GameAction): GameState {
 
 export function reducer(state: GameState, action: GameAction): GameState {
   if (action.type === "RESET_GAME") {
-    return initGame();
+    return resetMatch();
   }
 
   return transition(state, action);

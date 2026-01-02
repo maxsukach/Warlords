@@ -11,6 +11,8 @@ import { CardView as DemoCardView } from '@/components/game/CardView';
 import { CombatLogDisplay } from '@/components/CombatLogDisplay';
 import { resolveDef } from '@/lib/cards/resolve';
 import type { CardId } from '@/lib/cards/catalog';
+import { runAiTurn } from "@/lib/ai/aiTurn";
+import { MatchResultOverlay } from "@/components/MatchResultOverlay";
 
 function cardToDefinition(card: Card) {
   try {
@@ -106,50 +108,38 @@ export default function Home() {
     setSettings(loaded);
   }, [isMounted]);
 
-  // AI Main Turn Loop (Choosing Action, Declaring Attack/Scout)
+  // AI Main Turn Loop driven by aiTurn plan
   useEffect(() => {
     if (!isMounted || state.turn === 0 || state.gameStatus === "GAME_OVER") return;
-    if (state.activePlayer !== 'AI') {
+    if (state.activePlayer !== "AI") {
       setAiThinking(false);
       return;
     }
+    if (state.phase !== "SELECT_ACTION" || state.reveal) return;
 
-    if (state.phase === "END_TURN" || state.reveal) {
-      setAiThinking(false);
-      return;
-    }
+    const disableAutoAi = process.env.NEXT_PUBLIC_DISABLE_AI === "1";
+    if (disableAutoAi) return;
 
-    if (state.phase === "SELECT_ACTION") {
-      setAiThinking(true);
-      const t1 = setTimeout(() => {
-        const aiHasAnyPower = state.handAi.some((c) => resolveDef(c.cardId).power > 0);
-        if (aiHasAnyPower) {
-          dispatch({ type: "SELECT_ATTACK" });
-          
-          const scouts = state.handAi.filter(c => resolveDef(c.cardId).unit === "SCOUT");
-          const useScout = scouts.length > 0 && Math.random() < 0.3; // 30% to use scout if available
+    setAiThinking(true);
+    const plan = runAiTurn(state);
+    const t = setTimeout(() => {
+      if (plan.action === "PASS" || !plan.cardIdToPlay) {
+        dispatch({ type: "SELECT_PASS" });
+        setAiThinking(false);
+        return;
+      }
 
-          const toToggle = useScout
-            ? scouts[0]
-            : [...state.handAi].sort((a, b) => resolveDef(b.cardId).power - resolveDef(a.cardId).power)[0];
-          
-          if (toToggle) {
-            setTimeout(() => {
-              dispatch({ type: "TOGGLE_ATTACK_CARD", cardId: toToggle.id });
-              setTimeout(() => {
-                dispatch({ type: "CONFIRM_ATTACK" });
-                setAiThinking(false);
-              }, aiDelayMs);
-            }, aiDelayMs);
-          } else {
-             dispatch({ type: "SELECT_PASS" });
-          }
-        } else {
-          dispatch({ type: "SELECT_PASS" });
-        }
-      }, animDelayMs * 2);
-      return () => clearTimeout(t1);
-    }
+      dispatch({ type: "SELECT_ATTACK" });
+      setTimeout(() => {
+        dispatch({ type: "TOGGLE_ATTACK_CARD", cardId: plan.cardIdToPlay! });
+        setTimeout(() => {
+          dispatch({ type: "CONFIRM_ATTACK" });
+          setAiThinking(false);
+        }, aiDelayMs);
+      }, aiDelayMs);
+    }, animDelayMs);
+
+    return () => clearTimeout(t);
   }, [state.activePlayer, state.phase, state.handAi, state.gameStatus, state.reveal, state.turn, isMounted, aiDelayMs, animDelayMs]);
 
   // AI Defense Loop (When player attacks AI)
@@ -298,6 +288,12 @@ export default function Home() {
 
   return (
     <main className="min-h-screen w-full bg-neutral-950 text-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] overscroll-none overflow-hidden flex flex-col">
+      {state.matchResult && (
+        <MatchResultOverlay
+          result={state.matchResult}
+          onRestart={() => dispatch({ type: "RESET_GAME" })}
+        />
+      )}
       <div className="mx-auto w-full max-w-[480px] flex-1 flex flex-col h-full">
         {/* HEADER */}
         <header className="sticky top-0 z-20 border-b border-white/10 bg-neutral-950/80 backdrop-blur">
@@ -462,6 +458,20 @@ export default function Home() {
                             >
                                 Run 50 turns (FAST TEST)
                             </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => dispatch({ type: "DEBUG_DRAW_ONE" })}
+                                className="rounded bg-blue-500/20 border border-blue-400/30 px-2 py-1 text-[9px] font-bold uppercase hover:bg-blue-500/30 active:scale-95"
+                              >
+                                Draw 1 (dev)
+                              </button>
+                              <button
+                                onClick={() => dispatch({ type: "DEBUG_FORCE_END_TURN" })}
+                                className="rounded bg-red-500/20 border border-red-400/30 px-2 py-1 text-[9px] font-bold uppercase hover:bg-red-500/30 active:scale-95"
+                              >
+                                Force End Turn
+                              </button>
+                            </div>
                             {testResult && (
                                 <div className={`text-[9px] font-bold uppercase ${testResult.invariantChecksPassed ? 'text-green-500' : 'text-red-500'}`}>
                                     {testResult.invariantChecksPassed ? 'Pass' : 'Inv Fail'} • {testResult.totalTurns} Turns
