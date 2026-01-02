@@ -156,7 +156,7 @@ export function transition(state: GameState, action: GameAction): GameState {
 
         const attackerName = state.activePlayer === "YOU" ? "YOU" : "AI";
         const logMsg = caught
-          ? `${attackerName} Scout caught by ${catchers[0].name}! Revealed ${revealedCards.length} units.`
+          ? `${attackerName} Scout caught by ${resolveDef(catchers[0].cardId).name}! Revealed ${revealedCards.length} units.`
           : `${attackerName} Scout succeeded! Revealed ${revealedCards.length} units.`;
 
         return {

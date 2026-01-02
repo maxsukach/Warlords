@@ -290,10 +290,10 @@ export default function Home() {
   const youAreDefender = state.phase === "DEFENSE_DECLARE" && state.activePlayer === "AI";
 
   const demoHand: Array<{ cardId: CardId; state: "idle" | "selected" | "attacking" }> = [
-    { cardId: "cossacks_infantry_basic", state: "idle" },
-    { cardId: "cossacks_archer_basic", state: "selected" },
-    { cardId: "cossacks_cavalry_basic", state: "attacking" },
-    { cardId: "cossacks_scout_basic", state: "idle" },
+    { cardId: "cossacks.INFANTRY.basic", state: "idle" },
+    { cardId: "cossacks.ARCHER.basic", state: "selected" },
+    { cardId: "cossacks.CAVALRY.basic", state: "attacking" },
+    { cardId: "cossacks.SCOUT.basic", state: "idle" },
   ];
 
   return (
@@ -384,13 +384,16 @@ export default function Home() {
               <div className="relative z-50 rounded-2xl border-2 border-blue-500/40 bg-blue-500/10 p-5 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200">
                   <div className="text-sm font-black uppercase tracking-widest text-blue-300 mb-4">{state.reveal.title}</div>
                   <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
-                      {state.reveal.cards.map((c, i) => (
+                      {state.reveal.cards.map((c, i) => {
+                        const def = resolveDef(c.cardId);
+                        return (
                           <div key={i} className="h-28 w-20 shrink-0 rounded-xl border border-blue-400/30 bg-black/40 p-2 flex flex-col">
-                              <div className="text-[8px] uppercase font-black opacity-40">{c.type}</div>
-                              <div className="text-[10px] font-bold mt-1 leading-tight">{c.name}</div>
-                              <div className="mt-auto text-xs font-black text-blue-300 text-right">P:{resolveDef(c.cardId).power}</div>
+                              <div className="text-[8px] uppercase font-black opacity-40">{def.unit}</div>
+                              <div className="text-[10px] font-bold mt-1 leading-tight">{def.name}</div>
+                              <div className="mt-auto text-xs font-black text-blue-300 text-right">P:{def.power}</div>
                           </div>
-                      ))}
+                        );
+                      })}
                   </div>
                   <button 
                     onClick={() => dispatch({ type: 'CLOSE_REVEAL' })}
@@ -639,7 +642,14 @@ export default function Home() {
                                     onClick={() => dispatch({ type: "CONFIRM_ATTACK" })} 
                                     className="w-full rounded-xl bg-red-600 text-white px-4 py-4 text-sm font-black uppercase tracking-widest disabled:opacity-30 shadow-2xl active:scale-[0.98] transition-transform"
                                 >
-                                    {state.selectedAttackIds.length === 1 && state.handYou.find(c => c.id === state.selectedAttackIds[0])?.type === "SCOUT" ? "Send Scout" : `Launch Attack (${state.selectedAttackIds.length})`}
+                                    {(() => {
+                                      const selected = state.selectedAttackIds.length === 1
+                                        ? state.handYou.find(c => c.id === state.selectedAttackIds[0])
+                                        : null;
+                                      const isScout = selected ? resolveDef(selected.cardId).unit === "SCOUT" : false;
+                                      if (isScout) return "Send Scout";
+                                      return `Launch Attack (${state.selectedAttackIds.length})`;
+                                    })()}
                                 </button>
                             )}
                             {state.phase === "DEFENSE_DECLARE" && youAreDefender && (

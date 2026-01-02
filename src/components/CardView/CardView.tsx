@@ -62,7 +62,6 @@ export function CardView(props: CardViewProps) {
   const resetKey = cardDef?.id ?? cardId ?? "unknown";
 
   useEffect(() => {
-    setArtAttempt(0);
     setImgFailed(false);
   }, [resetKey]);
 

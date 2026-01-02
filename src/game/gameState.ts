@@ -1,5 +1,5 @@
 import { buildFactionDeck, type CardInstance } from "@/lib/cards/instances";
-import { type Faction } from "@/lib/cards/resolve";
+import { type Faction } from "@/lib/cards/catalog";
 
 /** 
  * CONSTANTS 
