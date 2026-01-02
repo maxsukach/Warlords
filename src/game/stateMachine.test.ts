@@ -3,19 +3,12 @@ import { describe, expect, it } from "vitest";
 import { HAND_LIMIT, STARTING_HP, type GameState, type Card } from "./gameState";
 import { getAllowedActions, transition } from "./stateMachine";
 
-function createCard(
-  owner: "YOU" | "AI",
-  idSuffix: string,
-  power = 2,
-  type: Card["type"] = "INFANTRY",
-  cardId: Card["cardId"] = "cossacks_infantry_basic"
-): Card {
+import { resolveDef } from "@/lib/cards/resolve";
+
+function createCard(owner: "YOU" | "AI", cardId: Card["cardId"], instance = "a1"): Card {
   return {
-    id: `${owner}-${idSuffix}`,
+    id: `${owner}-${instance}`,
     cardId,
-    name: `${type}-${idSuffix}`,
-    power,
-    type,
     owner,
   };
 }
@@ -63,7 +56,7 @@ describe("stateMachine", () => {
   });
 
   it("invalid action is logged and state unchanged", () => {
-    const attackCard = createCard("YOU", "a1");
+    const attackCard = createCard("YOU", "cossacks.INFANTRY.basic");
     const state = baseState({ phase: "ATTACK_DECLARE", handYou: [attackCard] });
 
     const next = transition(state, { type: "CONFIRM_ATTACK" });
@@ -74,8 +67,8 @@ describe("stateMachine", () => {
   });
 
   it("attack flow transitions across phases correctly", () => {
-    const attackCard = createCard("YOU", "a1", 3, "INFANTRY");
-    const defenseCard = createCard("AI", "d1", 1, "INFANTRY");
+    const attackCard = createCard("YOU", "cossacks.INFANTRY.basic");
+    const defenseCard = createCard("AI", "cossacks.INFANTRY.basic");
 
     let state = baseState({
       handYou: [attackCard],
@@ -99,7 +92,9 @@ describe("stateMachine", () => {
 
     state = transition(state, { type: "RESOLVE_COMBAT" });
     expect(state.phase).toBe("END_TURN");
-    expect(state.hpAi).toBe(STARTING_HP - Math.max(0, attackCard.power - defenseCard.power));
+    const atkPower = resolveDef(attackCard.cardId).power;
+    const defPower = resolveDef(defenseCard.cardId).power;
+    expect(state.hpAi).toBe(STARTING_HP - Math.max(0, atkPower - defPower));
 
     state = transition(state, { type: "NEXT_TURN" });
     expect(state.phase).toBe("SELECT_ACTION");

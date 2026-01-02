@@ -1,5 +1,4 @@
 import {
-  type CardArtExt,
   type CardDefinition,
   type CardId,
   type CardKind,
@@ -9,12 +8,12 @@ import {
   assertCardDefinition,
   makeCardId,
 } from "./contract";
-
-const art = (folder: string, baseName: string, preferredExt: CardArtExt = "png") => ({
-  folder,
-  baseName,
-  preferredExt,
-});
+import {
+  getCardArtCandidates as getArtCandidates,
+  PLACEHOLDER_ART as CONTRACT_PLACEHOLDER,
+  type Faction as ArtFaction,
+  type UnitKey,
+} from "@/lib/contract";
 
 const baseCard = (
   id: CardId,
@@ -34,7 +33,11 @@ const baseCard = (
   displayName,
   power,
   deckCount,
-  art: art(artFolder, artBaseName, "png"),
+  art: {
+    folder: artFolder,
+    baseName: artBaseName,
+    preferredExt: "png",
+  },
   rarity: "BASIC",
 });
 
@@ -137,10 +140,11 @@ function warnMissingCard(id: CardId) {
   }
 }
 
-function warnMissingArt(id: CardId) {
-  if (process.env.NODE_ENV !== "production") {
-    console.warn("CardDefinition missing art metadata:", id);
-  }
+function mapToArt(def: CardDefinition): { faction: ArtFaction; unitType: UnitKey } | null {
+  const faction = def.faction?.toLowerCase() as ArtFaction | undefined;
+  const unit = def.unitType as UnitKey | undefined;
+  if (!faction || !unit) return null;
+  return { faction, unitType: unit };
 }
 
 export function getCardDef(id: CardId): CardDefinition {
@@ -163,50 +167,21 @@ export function listCardsByUnitType(unitType: UnitType): CardDefinition[] {
   return Object.values(CARD_REGISTRY).filter((c) => c.unitType === unitType);
 }
 
-function buildArtPath(folder: string, baseName: string, ext: CardArtExt) {
-  return `/cards/${folder}/${baseName}.${ext}`;
-}
-
 export function getCardArtCandidates(cardId: CardId): string[] {
   const def = CARD_REGISTRY[cardId];
   if (!def) {
     warnMissingCard(cardId);
     return [PLACEHOLDER_ART];
   }
-  const { folder, baseName, preferredExt, fallbacks } = def.art ?? {};
-  if (!folder || !baseName || !preferredExt) {
-    warnMissingArt(cardId);
-    return [PLACEHOLDER_ART];
-  }
-
-  const candidates: Array<{ baseName: string; ext: CardArtExt }> = [
-    { baseName, ext: preferredExt },
-    ...(fallbacks ?? []).map((fallback) => ({
-      baseName: fallback.baseName ?? baseName,
-      ext: fallback.ext,
-    })),
-  ];
-
-  const seen = new Set<string>();
-  const urls = candidates
-    .map((candidate) => buildArtPath(folder, candidate.baseName, candidate.ext))
-    .filter((url) => {
-      if (seen.has(url)) return false;
-      seen.add(url);
-      return true;
-    });
-
-  if (urls.length === 0) return [PLACEHOLDER_ART];
-  if (!seen.has(PLACEHOLDER_ART)) {
-    urls.push(PLACEHOLDER_ART);
-  }
-  return urls;
+  const map = mapToArt(def);
+  if (!map) return [PLACEHOLDER_ART];
+  return getArtCandidates(map.faction, map.unitType);
 }
 
 export function getCardArtUrl(cardId: CardId, opts?: { attempt?: number }): string {
   const candidates = getCardArtCandidates(cardId);
   const attempt = opts?.attempt ?? 0;
-  return candidates[attempt] ?? PLACEHOLDER_ART;
+  return candidates[attempt] ?? CONTRACT_PLACEHOLDER;
 }
 
 export function validateCardRegistry(): { ok: boolean; errors: string[] } {

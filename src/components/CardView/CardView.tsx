@@ -1,15 +1,18 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import styles from "./CardView.module.css";
-import { getCardArtCandidates, getCardArtUrl, getCardDef, type CardDefinition } from "@/domain/cards";
+import { CardArt } from "@/components/CardArt";
+import { resolveDef } from "@/lib/cards/resolve";
+import { getArtUrl } from "@/lib/cards/getArtUrl";
+import type { CardDefinition, CardId } from "@/lib/cards/catalog";
 
 type Size = "compact" | "medium" | "large";
 
 export type CardViewProps = {
   card?: CardDefinition | null;
-  cardId?: CardDefinition["id"];
+  cardId?: CardId;
   powerOverride?: number;
   size?: Size;
   selected?: boolean;
@@ -38,14 +41,13 @@ export function CardView(props: CardViewProps) {
     showPower = true,
     className = "",
   } = props;
-  const [artAttempt, setArtAttempt] = useState(0);
   const [imgFailed, setImgFailed] = useState(false);
   let cardDef = props.card ?? null;
   const warnedMissing = CardViewWarnings;
 
   if (!cardDef && cardId) {
     try {
-      cardDef = getCardDef(cardId);
+      cardDef = resolveDef(cardId);
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         const key = `missing-cardid:${cardId}`;
@@ -87,20 +89,19 @@ export function CardView(props: CardViewProps) {
     );
   }
 
+  const name = cardDef.name ?? cardDef.id;
+  const power = powerOverride ?? cardDef.power;
+  const unitType = cardDef.unit;
+  const artUrl = getArtUrl(cardDef);
+  const useArt = !!artUrl && !imgFailed;
+
   if (process.env.NODE_ENV !== "production") {
     const key = cardDef.id ?? "unknown-card";
-    if ((!cardDef.art?.baseName || !cardDef.art?.folder) && !warnedMissing.has(key)) {
-      console.warn("CardView missing art config for card:", cardDef);
+    if (!warnedMissing.has(key) && !artUrl) {
+      console.warn("CardView missing art url for card:", cardDef);
       warnedMissing.add(key);
     }
   }
-
-  const name = cardDef.displayName ?? cardDef.shortName ?? cardDef.id;
-  const power = powerOverride ?? cardDef.power;
-  const unitType = cardDef.unitType;
-  const artCandidates = getCardArtCandidates(cardDef.id);
-  const artUrl = getCardArtUrl(cardDef.id, { attempt: artAttempt });
-  const useArt = !!artUrl && !imgFailed;
 
   return (
     <button
@@ -123,20 +124,10 @@ export function CardView(props: CardViewProps) {
       <div className={styles.body}>
         {useArt ? (
           <div className={styles.artWrap}>
-            <Image
+            <CardArt
               src={artUrl}
               alt={name}
-              fill
-              sizes="(max-width: 480px) 80px, 120px"
               className={styles.art}
-              unoptimized
-              onError={() => {
-                if (artAttempt < artCandidates.length - 1) {
-                  setArtAttempt((prev) => prev + 1);
-                } else {
-                  setImgFailed(true);
-                }
-              }}
             />
           </div>
         ) : (

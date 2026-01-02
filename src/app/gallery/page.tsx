@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   getCardArtCandidates,
   getCardArtUrl,
@@ -11,23 +11,14 @@ import {
 } from "@/domain/cards";
 
 export default function GalleryPage() {
-  const [mounted, setMounted] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
-  // Hydration guard: render only after client mount to avoid SSR/CSR mismatch for dev-only gallery.
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const rows = useMemo(() => {
-    const factions: Faction[] = ["COSSACKS", "TATARS", "POLAND", "MUSCOVY", "NEUTRAL"];
-    return factions.map((faction) => ({
-      faction,
-      defs: listCardsByFaction(faction),
-    }));
-  }, [refresh]);
-
-  if (!mounted) return null;
+  const factions: Faction[] = ["COSSACKS", "TATARS", "POLAND", "MUSCOVY", "NEUTRAL"];
+  const rows = factions.map((faction) => ({
+    faction,
+    defs: listCardsByFaction(faction),
+    refreshKey: refresh,
+  }));
 
   return (
     <main className="min-h-screen w-full bg-neutral-950 text-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] flex flex-col">
@@ -125,6 +116,8 @@ function AssetThumb({
 }) {
   // Try candidates in order; mark missing if all fail.
   return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={src}
         src={src}
@@ -142,8 +135,9 @@ function AssetThumb({
             onFallback();
           } else {
             onMissing();
-        }
-      }}
-    />
+          }
+        }}
+      />
+    </>
   );
 }

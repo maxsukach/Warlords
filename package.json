@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "audit:assets": "tsx scripts/audit-assets.ts",
+    "verify:art": "tsx scripts/verifyCardArt.ts"
   },
   "dependencies": {
     "next": "16.0.8",
@@ -22,6 +24,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5",
     "vitest": "^2.1.4"
   }

@@ -9,7 +9,7 @@ export default function SwRegister() {
     const register = async () => {
       try {
         await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      } catch (e) {
+      } catch {
         // ignore in dev if needed
       }
     };

@@ -1,5 +1,6 @@
 import { HAND_LIMIT, clampLog, drawCards, initGame, shuffle } from "./gameState";
-import type { Card, GameState, Phase, Player } from "./gameState";
+import type { Card, GameState, GameStatus, Phase, Player } from "./gameState";
+import { resolveDef } from "@/lib/cards/resolve";
 
 export type { GameState, Phase } from "./gameState";
 
@@ -127,15 +128,18 @@ export function transition(state: GameState, action: GameAction): GameState {
       const committed = attackerHand.filter((c) => state.selectedAttackIds.includes(c.id));
       const remainingHand = attackerHand.filter((c) => !state.selectedAttackIds.includes(c.id));
 
-      const isScoutAttack = committed.length === 1 && committed[0].type === "SCOUT";
+      const isScoutAttack = committed.length === 1 && resolveDef(committed[0].cardId).unit === "SCOUT";
       if (isScoutAttack) {
         const scoutCard = committed[0];
         const defenderHand = state.activePlayer === "YOU" ? state.handAi : state.handYou;
-        const catchers = defenderHand.filter((c) => ["INFANTRY", "ARCHER", "CAVALRY", "SCOUT"].includes(c.type));
+        const catchers = defenderHand.filter((c) => {
+          const unit = resolveDef(c.cardId).unit;
+          return ["INFANTRY", "ARCHER", "CAVALRY", "SCOUT"].includes(unit);
+        });
 
-        let revealedCards: Card[] = [];
+        const revealedCards: Card[] = [];
         let caught = false;
-        let nextDiscardAttacker = [...(state.activePlayer === "YOU" ? state.discardYou : state.discardAi)];
+        const nextDiscardAttacker = [...(state.activePlayer === "YOU" ? state.discardYou : state.discardAi)];
 
         if (catchers.length > 0) {
           caught = true;
@@ -172,7 +176,7 @@ export function transition(state: GameState, action: GameAction): GameState {
         };
       }
 
-      const names = committed.map((c) => c.name).join(", ");
+      const names = committed.map((c) => resolveDef(c.cardId).name).join(", ");
       const attackerName = state.activePlayer === "YOU" ? "YOU" : "AI";
 
       return {
@@ -202,7 +206,7 @@ export function transition(state: GameState, action: GameAction): GameState {
       const committed = defenderHand.filter((c) => state.selectedDefenseIds.includes(c.id));
       const remainingHand = defenderHand.filter((c) => !state.selectedDefenseIds.includes(c.id));
 
-      const names = committed.length > 0 ? committed.map((c) => c.name).join(", ") : "no units";
+      const names = committed.length > 0 ? committed.map((c) => resolveDef(c.cardId).name).join(", ") : "no units";
       const defenderName = defenderFor(state.activePlayer);
 
       return {
@@ -219,8 +223,8 @@ export function transition(state: GameState, action: GameAction): GameState {
     case "RESOLVE_COMBAT": {
       if (state.phase !== "COMBAT_RESOLUTION") return invalidAction(state, action.type);
 
-      const totalAttack = state.committedAttackCards.reduce((sum, c) => sum + c.power, 0);
-      const totalDefense = state.committedDefenseCards.reduce((sum, c) => sum + c.power, 0);
+      const totalAttack = state.committedAttackCards.reduce((sum, c) => sum + (resolveDef(c.cardId).power ?? 0), 0);
+      const totalDefense = state.committedDefenseCards.reduce((sum, c) => sum + (resolveDef(c.cardId).power ?? 0), 0);
 
       const netDamage = Math.max(0, totalAttack - totalDefense);
       const defenderName = state.activePlayer === "YOU" ? "AI" : "You";
@@ -240,7 +244,7 @@ export function transition(state: GameState, action: GameAction): GameState {
         `${defenderName} HP: ${state.activePlayer === "YOU" ? nextHpAi : nextHpYou}.`,
       ];
 
-      let nextStatus = state.gameStatus;
+      let nextStatus: GameStatus = state.gameStatus;
       let nextWinner = state.winner;
 
       if (nextHpYou <= 0) {
@@ -293,7 +297,7 @@ export function transition(state: GameState, action: GameAction): GameState {
       let hAi = state.handAi;
       let disAi = state.discardAi;
       let seed = state.rngSeed;
-      let logEntries: string[] = [];
+      const logEntries: string[] = [];
 
       let addedDrawsYou = 0;
       let addedReshufflesYou = 0;

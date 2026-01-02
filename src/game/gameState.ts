@@ -1,4 +1,5 @@
-import { listCardsByFaction, type CardId, type Faction, type UnitType } from "@/domain/cards";
+import { buildFactionDeck, type CardInstance } from "@/lib/cards/instances";
+import { type Faction } from "@/lib/cards/resolve";
 
 /** 
  * CONSTANTS 
@@ -7,14 +8,14 @@ export const HAND_LIMIT = 6 as const;
 export const STARTING_HP = 20 as const;
 export const AI_THINK_MS = 600 as const;
 
-const DEFAULT_DECK_FACTION: Faction = "COSSACKS";
-const DEFAULT_DECK = listCardsByFaction(DEFAULT_DECK_FACTION).filter((def) => (def.deckCount ?? 0) > 0);
-export const CARDS_PER_PLAYER = DEFAULT_DECK.reduce((sum, def) => sum + (def.deckCount ?? 0), 0);
+const DEFAULT_DECK_FACTION: Faction = "cossacks";
+export const CARDS_PER_PLAYER = 18 as const;
 
 /**
  * TYPES
  */
 export type Player = "YOU" | "AI";
+export type GameStatus = "PLAYING" | "GAME_OVER";
 export type Phase =
   | "SELECT_ACTION"
   | "ATTACK_DECLARE"
@@ -22,14 +23,7 @@ export type Phase =
   | "COMBAT_RESOLUTION"
   | "END_TURN";
 
-export type Card = {
-  id: string;
-  cardId: CardId;
-  name: string;
-  power: number;
-  type: UnitType;
-  owner: Player;
-};
+export type Card = CardInstance;
 
 export type GameState = {
   turn: number;
@@ -52,7 +46,7 @@ export type GameState = {
   hpYou: number;
   hpAi: number;
 
-  gameStatus: "PLAYING" | "GAME_OVER";
+  gameStatus: GameStatus;
   winner: Player | null;
 
   reveal: {
@@ -93,21 +87,7 @@ export function shuffle<T>(array: T[], seed: number): { shuffled: T[]; nextSeed:
 }
 
 function createDeck(owner: Player): Card[] {
-  const deck: Card[] = [];
-  DEFAULT_DECK.forEach((def) => {
-    const count = def.deckCount ?? 0;
-    for (let i = 1; i <= count; i++) {
-      deck.push({
-        id: `${owner}-${def.id}-${i.toString().padStart(2, "0")}`,
-        cardId: def.id,
-        name: def.displayName ?? def.shortName ?? def.id,
-        power: def.power ?? 0,
-        type: def.unitType,
-        owner,
-      });
-    }
-  });
-  return deck;
+  return buildFactionDeck(DEFAULT_DECK_FACTION, owner);
 }
 
 export function drawCards(deck: Card[], hand: Card[], discard: Card[], limit: number, seed: number): { 
@@ -124,11 +104,11 @@ export function drawCards(deck: Card[], hand: Card[], discard: Card[], limit: nu
   
   let currDeck = [...deck];
   let currDiscard = [...discard];
-  let currHand = [...hand];
+  const currHand = [...hand];
   let currSeed = seed;
   let drawnCount = 0;
   let reshuffles = 0;
-  let logEntries: string[] = [];
+  const logEntries: string[] = [];
 
   for (let i = 0; i < needed; i++) {
     if (currDeck.length === 0) {

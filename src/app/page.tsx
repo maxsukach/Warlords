@@ -12,6 +12,7 @@ export default function StartPage() {
     if (typeof window === "undefined") return;
     // Placeholder: detect saved state when implemented
     const saved = localStorage.getItem("warlords_saved_state");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasSavedGame(Boolean(saved));
 
     const s = getSettings();

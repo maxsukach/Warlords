@@ -32,7 +32,7 @@ export type CardDefinition = {
   tags?: string[];
 };
 
-export const PLACEHOLDER_ART = "/cards/_missing.png";
+export const PLACEHOLDER_ART = "/cards/_placeholder.webp";
 
 export function makeCardId(input: { faction: Faction; unitType: UnitType; rarity?: CardRarity; slug?: string }) {
   const factionSlug = input.faction.toLowerCase();
@@ -49,7 +49,7 @@ export function isStructure(card: CardDefinition): boolean {
   return card.unitType === "FORT";
 }
 
-export function assertCardDefinition(x: any): asserts x is CardDefinition {
+export function assertCardDefinition(x: unknown): asserts x is CardDefinition {
   if (!x || typeof x !== "object") throw new Error("CardDefinition must be an object");
   const required = ["id", "faction", "unitType", "kind", "art"];
   required.forEach((key) => {

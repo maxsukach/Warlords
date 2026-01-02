@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_REGISTRY, getCardArtUrl, getCardDef, makeCardId, PLACEHOLDER_ART } from "./index";
+import { CARD_REGISTRY, getCardArtUrl, getCardArtCandidates, getCardDef, makeCardId, PLACEHOLDER_ART } from "./index";
 
 describe("card contract", () => {
   it("makeCardId builds expected slug", () => {
@@ -13,7 +13,9 @@ describe("card contract", () => {
   });
 
   it("getCardArtUrl handles missing card safely", () => {
-    expect(getCardArtUrl("missing_card")).toBe(PLACEHOLDER_ART);
+    const url = getCardArtUrl("missing_card");
+    expect(url).toBe(PLACEHOLDER_ART);
+    expect(getCardArtCandidates("missing_card")[0]).toBe(PLACEHOLDER_ART);
   });
 
   it("registry contains unique ids", () => {

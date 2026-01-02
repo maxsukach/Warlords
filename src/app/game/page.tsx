@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from 'next/link';
 import { useEffect, useReducer, useState, useRef } from 'react';
@@ -7,11 +8,13 @@ import { reducer } from '@/game/stateMachine';
 import { DEFAULT_SETTINGS, getSettings, type Settings } from '@/app/settings/model';
 import { CardView } from '@/components/CardView/CardView';
 import { CardView as DemoCardView } from '@/components/game/CardView';
-import { getCardDef, type CardId } from '@/domain/cards';
+import { CombatLogDisplay } from '@/components/CombatLogDisplay';
+import { resolveDef } from '@/lib/cards/resolve';
+import type { CardId } from '@/lib/cards/catalog';
 
 function cardToDefinition(card: Card) {
   try {
-    return getCardDef(card.cardId);
+    return resolveDef(card.cardId);
   } catch (e) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("Missing CardDefinition for", card.cardId, e);
@@ -61,10 +64,18 @@ export default function Home() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [aiThinking, setAiThinking] = useState(false);
   const [showInstallHint, setShowInstallHint] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  type FastTestResult = {
+    totalTurns: number;
+    totalDrawsYou: number;
+    totalDrawsAi: number;
+    totalReshufflesYou: number;
+    totalReshufflesAi: number;
+    invariantChecksPassed: boolean;
+  } | null;
+
+  const [testResult, setTestResult] = useState<FastTestResult>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const aiSpeedFactor = settings.aiSpeed === "fast" ? 0.5 : 1;
   const animSpeedFactor = settings.animationSpeed === "slow" ? 1.5 : settings.animationSpeed === "fast" ? 0.75 : 1;
@@ -84,7 +95,7 @@ export default function Home() {
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       // iOS Safari legacy
-      (window.navigator as any).standalone === true;
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
 
     if (isMobile && !isStandalone) setShowInstallHint(true);
   }, []);
@@ -93,7 +104,6 @@ export default function Home() {
     if (!isMounted) return;
     const loaded = getSettings();
     setSettings(loaded);
-    setSettingsLoaded(true);
   }, [isMounted]);
 
   // AI Main Turn Loop (Choosing Action, Declaring Attack/Scout)
@@ -112,14 +122,16 @@ export default function Home() {
     if (state.phase === "SELECT_ACTION") {
       setAiThinking(true);
       const t1 = setTimeout(() => {
-        const aiHasAnyPower = state.handAi.some((c) => c.power > 0);
+        const aiHasAnyPower = state.handAi.some((c) => resolveDef(c.cardId).power > 0);
         if (aiHasAnyPower) {
           dispatch({ type: "SELECT_ATTACK" });
           
-          const scouts = state.handAi.filter(c => c.type === "SCOUT");
+          const scouts = state.handAi.filter(c => resolveDef(c.cardId).unit === "SCOUT");
           const useScout = scouts.length > 0 && Math.random() < 0.3; // 30% to use scout if available
 
-          const toToggle = useScout ? scouts[0] : [...state.handAi].sort((a, b) => b.power - a.power)[0];
+          const toToggle = useScout
+            ? scouts[0]
+            : [...state.handAi].sort((a, b) => resolveDef(b.cardId).power - resolveDef(a.cardId).power)[0];
           
           if (toToggle) {
             setTimeout(() => {
@@ -148,7 +160,7 @@ export default function Home() {
 
     setAiThinking(true);
     const t = setTimeout(() => {
-      const best = [...state.handAi].sort((a, b) => b.power - a.power)[0];
+      const best = [...state.handAi].sort((a, b) => resolveDef(b.cardId).power - resolveDef(a.cardId).power)[0];
       if (best && state.committedAttackCards.length > 0) {
         dispatch({ type: "TOGGLE_DEFENSE_CARD", cardId: best.id });
       }
@@ -194,7 +206,7 @@ export default function Home() {
         console.error("Invariant check failed:", inv.errors);
       }
     }
-  }, [state.turn, state.phase, isMounted]);
+  }, [state, isMounted]);
 
   if (!isMounted) {
     return <main className="min-h-screen w-full bg-neutral-950" />;
@@ -202,12 +214,12 @@ export default function Home() {
 
   const runFastTest = () => {
     console.log("FAST TEST CLICK", {phase: state.phase, activePlayer: state.activePlayer});
-    let s = { ...state, hpYou: 999, hpAi: 999 }; // Prevent game over during test
+    let s = { ...state, hpYou: 999, hpAi: 999 };
     let turns = 0;
     let invFailed = false;
 
     // Helper to simulate a full round
-    const step = (curr: any, action: any) => {
+    const step = (curr: typeof state, action: Parameters<typeof reducer>[1]) => {
       const next = reducer(curr, action);
       const inv = checkInvariants(next);
       if (!inv.passed) invFailed = true;
@@ -300,6 +312,10 @@ export default function Home() {
                 )}
               </div>
 
+              <div className="w-full min-w-[180px]">
+                <CombatLogDisplay lines={state.combatLog} maxLines={3} variant="compact" />
+              </div>
+
               {aiThinking && state.gameStatus !== "GAME_OVER" && (
                 <span className="rounded-full bg-blue-500/20 text-blue-300 px-2 py-0.5 text-[10px] animate-pulse">
                   AI THINKING
@@ -372,7 +388,7 @@ export default function Home() {
                           <div key={i} className="h-28 w-20 shrink-0 rounded-xl border border-blue-400/30 bg-black/40 p-2 flex flex-col">
                               <div className="text-[8px] uppercase font-black opacity-40">{c.type}</div>
                               <div className="text-[10px] font-bold mt-1 leading-tight">{c.name}</div>
-                              <div className="mt-auto text-xs font-black text-blue-300 text-right">P:{c.power}</div>
+                              <div className="mt-auto text-xs font-black text-blue-300 text-right">P:{resolveDef(c.cardId).power}</div>
                           </div>
                       ))}
                   </div>
@@ -394,6 +410,7 @@ export default function Home() {
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
                       <div className="text-sm font-black uppercase tracking-[0.2em] text-white animate-pulse">Resolving combat...</div>
+                      <CombatLogDisplay lines={state.combatLog} maxLines={3} variant="overlay" className="w-full max-w-xs" />
                     </div>
                   </div>
                 )}
@@ -476,7 +493,7 @@ export default function Home() {
                                         <div className="flex gap-2 flex-wrap justify-center">
                                             {state.committedAttackCards.map(c => {
                                               const def = cardToDefinition(c);
-                                              return <CardView key={c.id} card={def} powerOverride={c.power} size="medium" />;
+                                              return <CardView key={c.id} card={def} size="medium" />;
                                             })}
                                         </div>
                                     </div>
@@ -497,7 +514,7 @@ export default function Home() {
                                         <div className="flex gap-2 flex-wrap justify-center">
                                             {state.committedDefenseCards.map(c => {
                                               const def = cardToDefinition(c);
-                                              return <CardView key={c.id} card={def} powerOverride={c.power} size="medium" />;
+                                              return <CardView key={c.id} card={def} size="medium" />;
                                             })}
                                         </div>
                                         <div className="text-[8px] uppercase opacity-30 font-bold mt-1">Defending</div>
@@ -594,7 +611,6 @@ export default function Home() {
                             <CardView 
                                 key={c.id} 
                                 card={def}
-                                powerOverride={c.power}
                                 size="compact"
                                 selected={state.selectedAttackIds.includes(c.id) || state.selectedDefenseIds.includes(c.id)} 
                                 onClick={() => {

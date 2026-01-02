@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import styles from "./CardView.module.css";
-import { getCardArtCandidates, getCardArtUrl, getCardDef, type CardDefinition, type CardId } from "@/domain/cards";
+import { CardArt } from "@/components/CardArt";
+import { resolveDef } from "@/lib/cards/resolve";
+import { getArtUrl } from "@/lib/cards/getArtUrl";
+import type { CardDefinition, CardId } from "@/lib/cards/catalog";
 
 export type CardState = "idle" | "selected" | "attacking" | "disabled";
 
@@ -15,11 +18,12 @@ type Props = {
 export function CardView({ cardId, state = "idle", onClick }: Props) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAttempt(0);
   }, [cardId]);
   let def: CardDefinition | null = null;
   try {
-    def = getCardDef(cardId);
+    def = resolveDef(cardId);
   } catch (error) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("Demo CardView missing registry entry:", cardId, error);
@@ -39,9 +43,9 @@ export function CardView({ cardId, state = "idle", onClick }: Props) {
       </button>
     );
   }
-  const artCandidates = getCardArtCandidates(cardId);
-  const imgSrc = getCardArtUrl(cardId, { attempt });
-  const name = def.displayName ?? def.shortName ?? def.id;
+  const artCandidates = [getArtUrl(def)];
+  const imgSrc = artCandidates[attempt] ?? artCandidates[0];
+  const name = def.name ?? def.id;
 
   const stateClass =
     state === "selected"
@@ -61,22 +65,17 @@ export function CardView({ cardId, state = "idle", onClick }: Props) {
       title={name}
     >
       <div className={styles.header}>
-        <span>{def.unitType.toLowerCase()}</span>
-        <span>{(def.rarity ?? "basic").toString().toLowerCase()}</span>
+        <span>{def.unit.toLowerCase()}</span>
+        <span>{def.variant.toString().toLowerCase()}</span>
       </div>
-      <div className={styles.body}>
-        <div className={styles.imgWrap}>
-          <img
-            src={imgSrc}
-            alt={name}
-            className={styles.img}
-            onError={() => {
-              if (attempt < artCandidates.length - 1) {
-                setAttempt((prev) => prev + 1);
-              }
-            }}
-          />
-        </div>
+        <div className={styles.body}>
+          <div className={styles.imgWrap}>
+            <CardArt
+              src={imgSrc}
+              alt={name}
+              className={styles.img}
+            />
+          </div>
         <div className={styles.name}>{name}</div>
       </div>
     </button>
