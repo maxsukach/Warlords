@@ -14,6 +14,8 @@ function createCard(owner: "YOU" | "AI", cardId: Card["cardId"], instance = "a1"
 }
 
 function baseState(overrides: Partial<GameState> = {}): GameState {
+  const fortYou = { id: "YOU-FORT", type: "FORT", owner: "YOU", level: 1, isActive: true } as const;
+  const fortAi = { id: "AI-FORT", type: "FORT", owner: "AI", level: 1, isActive: true } as const;
   return {
     turn: 1,
     activePlayer: "YOU",
@@ -24,6 +26,8 @@ function baseState(overrides: Partial<GameState> = {}): GameState {
     handAi: [],
     discardYou: [],
     discardAi: [],
+    buildingsYou: [fortYou],
+    buildingsAi: [fortAi],
     committedAttackCards: [],
     committedDefenseCards: [],
     selectedAttackIds: [],

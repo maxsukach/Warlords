@@ -20,6 +20,7 @@ export type GameStatus = "PLAYING" | "GAME_OVER";
 export type Phase =
   | "TURN_START"
   | "DRAW"
+  | "BUILD"
   | "SELECT_ACTION"
   | "ATTACK_DECLARE"
   | "DEFENSE_DECLARE"
@@ -28,6 +29,14 @@ export type Phase =
   | "GAME_OVER";
 
 export type Card = CardInstance;
+
+export type Building = {
+  id: string;
+  type: "FORT" | "BARRACKS" | "STABLES" | "ARCHERY_RANGE";
+  owner: Player;
+  level: 1 | 2 | 3;
+  isActive: boolean;
+};
 
 export type GameState = {
   turn: number;
@@ -53,6 +62,9 @@ export type GameState = {
   gameStatus: GameStatus;
   winner: Player | null;
   matchResult: "YOU_WIN" | "AI_WIN" | "DRAW" | null;
+
+  buildingsYou: Building[];
+  buildingsAi: Building[];
 
   reveal: {
     visible: boolean;
@@ -138,6 +150,8 @@ export function initGame(): GameState {
   const seed = Math.floor(Math.random() * 1000000);
   const initialDeckYou = createDeck(DEFAULT_DECK_FACTION, "YOU");
   const initialDeckAi = createDeck(DEFAULT_DECK_FACTION, "AI");
+  const fortYou: Building = { id: "YOU-FORT", type: "FORT", owner: "YOU", level: 1, isActive: true };
+  const fortAi: Building = { id: "AI-FORT", type: "FORT", owner: "AI", level: 1, isActive: true };
 
   const { shuffled: sDeckYou, nextSeed: s1 } = shuffle(initialDeckYou, seed);
   const { shuffled: sDeckAi, nextSeed: s2 } = shuffle(initialDeckAi, s1);
@@ -159,11 +173,13 @@ export function initGame(): GameState {
     committedDefenseCards: [],
     selectedAttackIds: [],
     selectedDefenseIds: [],
-  hpYou: STARTING_HP,
-  hpAi: STARTING_HP,
-  gameStatus: "PLAYING",
-  winner: null,
-  matchResult: null,
+    hpYou: STARTING_HP,
+    hpAi: STARTING_HP,
+    buildingsYou: [fortYou],
+    buildingsAi: [fortAi],
+    gameStatus: "PLAYING",
+    winner: null,
+    matchResult: null,
   reveal: null,
   combatLog: ["Game Started.", `YOU drew ${resYou.drawnCount} units.`, `AI drew ${resAi.drawnCount} units.`],
   rngSeed: resAi.nextSeed,
@@ -194,6 +210,8 @@ export const initialState: GameState = {
   handAi: [],
   discardYou: [],
   discardAi: [],
+  buildingsYou: [],
+  buildingsAi: [],
   committedAttackCards: [],
   committedDefenseCards: [],
   selectedAttackIds: [],

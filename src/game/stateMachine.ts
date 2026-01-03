@@ -4,6 +4,12 @@ import { resolveDef } from "@/lib/cards/resolve";
 import { drawCards, shuffle } from "@/lib/game/deck";
 import { endTurn } from "@/lib/game/turn";
 import { checkMatchEnd } from "@/lib/game/endConditions";
+import {
+  addDefaultBuildingIfAllowed,
+  applyFortDefense,
+  getPowerModifier,
+  setBuildingsActive,
+} from "./buildings";
 
 export type { GameState, Phase } from "./gameState";
 
@@ -48,6 +54,40 @@ function defenderFor(attacker: Player): Player {
   return attacker === "YOU" ? "AI" : "YOU";
 }
 
+function deactivateBuildings(state: GameState): GameState {
+  const target = state.activePlayer === "YOU" ? state.buildingsYou : state.buildingsAi;
+  const updated = setBuildingsActive(target, false);
+  return state.activePlayer === "YOU"
+    ? { ...state, buildingsYou: updated }
+    : { ...state, buildingsAi: updated };
+}
+
+function applyBuildPhase(state: GameState): GameState {
+  const target = state.activePlayer === "YOU" ? state.buildingsYou : state.buildingsAi;
+  let nextBuildings = setBuildingsActive(target, true);
+  let addedLog: string[] = [];
+  if (nextBuildings.length < 2) {
+    const { next, added } = addDefaultBuildingIfAllowed(nextBuildings, state.activePlayer);
+    nextBuildings = next;
+    if (added) {
+      addedLog = [`${state.activePlayer} built ${added.type} (L1).`];
+    }
+  }
+
+  const withBuildings =
+    state.activePlayer === "YOU"
+      ? { ...state, buildingsYou: nextBuildings }
+      : { ...state, buildingsAi: nextBuildings };
+
+  const nextLog = addedLog.length > 0 ? clampLog([...addedLog, ...withBuildings.combatLog]) : withBuildings.combatLog;
+
+  return {
+    ...withBuildings,
+    phase: "SELECT_ACTION",
+    combatLog: nextLog,
+  };
+}
+
 export function getAllowedActions(state: GameState): GameActionType[] {
   if (state.gameStatus === "GAME_OVER" || state.phase === "GAME_OVER") return [];
   if (state.reveal) return ["CLOSE_REVEAL"];
@@ -55,6 +95,7 @@ export function getAllowedActions(state: GameState): GameActionType[] {
   switch (state.phase) {
     case "TURN_START":
     case "DRAW":
+    case "BUILD":
       return [];
     case "SELECT_ACTION":
       return ["SELECT_ATTACK", "SELECT_PASS"];
@@ -79,6 +120,8 @@ export function getNextPhaseCandidates(state: GameState): Phase[] {
     case "TURN_START":
       return ["DRAW"];
     case "DRAW":
+      return ["BUILD"];
+    case "BUILD":
       return ["SELECT_ACTION"];
     case "SELECT_ACTION":
       return ["ATTACK_DECLARE", "END_TURN"];
@@ -241,8 +284,14 @@ export function transition(state: GameState, action: GameAction): GameState {
     case "RESOLVE_COMBAT": {
       if (state.phase !== "COMBAT_RESOLUTION") return invalidAction(state, action.type);
 
-      const totalAttack = state.committedAttackCards.reduce((sum, c) => sum + (resolveDef(c.cardId).power ?? 0), 0);
-      const totalDefense = state.committedDefenseCards.reduce((sum, c) => sum + (resolveDef(c.cardId).power ?? 0), 0);
+      const totalAttack = state.committedAttackCards.reduce(
+        (sum, c) => sum + ((resolveDef(c.cardId).power ?? 0) + getPowerModifier(c, c.owner === "YOU" ? state.buildingsYou : state.buildingsAi)),
+        0
+      );
+      const totalDefense = state.committedDefenseCards.reduce(
+        (sum, c) => sum + ((resolveDef(c.cardId).power ?? 0) + getPowerModifier(c, c.owner === "YOU" ? state.buildingsYou : state.buildingsAi)),
+        0
+      );
 
       const netDamage = Math.max(0, totalAttack - totalDefense);
       const defenderName = state.activePlayer === "YOU" ? "AI" : "You";
@@ -250,15 +299,18 @@ export function transition(state: GameState, action: GameAction): GameState {
       let nextHpYou = state.hpYou;
       let nextHpAi = state.hpAi;
 
+      const defenderBuildings = state.activePlayer === "YOU" ? state.buildingsAi : state.buildingsYou;
+      const adjustedDamage = applyFortDefense(netDamage, defenderBuildings);
+
       if (state.activePlayer === "YOU") {
-        nextHpAi = Math.max(0, state.hpAi - netDamage);
+        nextHpAi = Math.max(0, state.hpAi - adjustedDamage);
       } else {
-        nextHpYou = Math.max(0, state.hpYou - netDamage);
+        nextHpYou = Math.max(0, state.hpYou - adjustedDamage);
       }
 
       const lines = [
         `Battle: ${totalAttack} Atk vs ${totalDefense} Def.`,
-        netDamage > 0 ? `${defenderName} takes ${netDamage} damage.` : "Defenders hold the line.",
+        netDamage > 0 ? `${defenderName} takes ${adjustedDamage} damage.` : "Defenders hold the line.",
         `${defenderName} HP: ${state.activePlayer === "YOU" ? nextHpAi : nextHpYou}.`,
       ];
 
@@ -317,7 +369,11 @@ export function transition(state: GameState, action: GameAction): GameState {
     case "NEXT_TURN": {
       if (state.phase !== "END_TURN") return invalidAction(state, action.type);
 
-      return endTurn(state);
+      // deactivate current player's buildings
+      const deactivated = deactivateBuildings(state);
+      // switch turn and draw, then enter build phase for the new active player
+      const base = endTurn(deactivated);
+      return applyBuildPhase({ ...base, phase: "BUILD" });
     }
 
     case "CLOSE_REVEAL": {
@@ -399,7 +455,8 @@ export function transition(state: GameState, action: GameAction): GameState {
 
 export function reducer(state: GameState, action: GameAction): GameState {
   if (action.type === "RESET_GAME") {
-    return resetMatch();
+    const fresh = resetMatch();
+    return applyBuildPhase({ ...fresh, phase: "BUILD" });
   }
 
   return transition(state, action);
