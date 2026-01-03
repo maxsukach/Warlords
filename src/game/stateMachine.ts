@@ -16,6 +16,7 @@ export type { GameState, Phase } from "./gameState";
 export type GameActionType =
   | "SELECT_ATTACK"
   | "SELECT_PASS"
+  | "BUILD"
   | "TOGGLE_ATTACK_CARD"
   | "CONFIRM_ATTACK"
   | "TOGGLE_DEFENSE_CARD"
@@ -30,6 +31,7 @@ export type GameActionType =
 export type GameAction =
   | { type: "SELECT_ATTACK" }
   | { type: "SELECT_PASS" }
+  | { type: "BUILD" }
   | { type: "TOGGLE_ATTACK_CARD"; cardId: string }
   | { type: "CONFIRM_ATTACK" }
   | { type: "TOGGLE_DEFENSE_CARD"; cardId: string }
@@ -98,7 +100,7 @@ export function getAllowedActions(state: GameState): GameActionType[] {
     case "BUILD":
       return [];
     case "SELECT_ACTION":
-      return ["SELECT_ATTACK", "SELECT_PASS"];
+      return ["SELECT_ATTACK", "SELECT_PASS", "BUILD"];
     case "ATTACK_DECLARE":
       return ["TOGGLE_ATTACK_CARD", "CONFIRM_ATTACK"];
     case "DEFENSE_DECLARE":
@@ -169,6 +171,24 @@ export function transition(state: GameState, action: GameAction): GameState {
         ...state,
         phase: "END_TURN",
         combatLog: clampLog([`${who} holds position.`, ...state.combatLog]),
+      };
+    }
+
+    case "BUILD": {
+      if (state.phase !== "SELECT_ACTION") return invalidAction(state, action.type);
+      const target = state.activePlayer === "YOU" ? state.buildingsYou : state.buildingsAi;
+      const { next, added } = addDefaultBuildingIfAllowed(target, state.activePlayer);
+      const nextState =
+        state.activePlayer === "YOU"
+          ? { ...state, buildingsYou: next }
+          : { ...state, buildingsAi: next };
+      const logLine = added
+        ? `${state.activePlayer} built ${added.type} (L1).`
+        : `${state.activePlayer} cannot build more buildings.`;
+      return {
+        ...nextState,
+        phase: "END_TURN",
+        combatLog: clampLog([logLine, ...nextState.combatLog]),
       };
     }
 

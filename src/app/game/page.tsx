@@ -13,6 +13,7 @@ import { resolveDef } from '@/lib/cards/resolve';
 import type { CardId } from '@/lib/cards/catalog';
 import { runAiTurn } from "@/lib/ai/aiTurn";
 import { MatchResultOverlay } from "@/components/MatchResultOverlay";
+import { BuildingsRow } from "@/components/BuildingsRow";
 
 function cardToDefinition(card: Card) {
   try {
@@ -439,6 +440,10 @@ export default function Home() {
                             {phaseLabel(state.phase)}
                         </div>
                     </div>
+                    <div className="space-y-3 mb-4">
+                      <BuildingsRow title="Your Buildings" buildings={state.buildingsYou} />
+                      <BuildingsRow title="Enemy Buildings" buildings={state.buildingsAi} />
+                    </div>
 
                     {/* DECK DEBUG BLOCK */}
                     <div className="relative z-50 mb-4 flex flex-col gap-1 border-y border-white/5 py-2">
@@ -638,14 +643,20 @@ export default function Home() {
                 </div>
 
                 {/* Primary Actions */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                     {state.phase === "SELECT_ACTION" && state.activePlayer === "YOU" ? (
                         <>
                             <button onClick={() => dispatch({ type: "SELECT_ATTACK" })} className="rounded-xl bg-white text-black px-4 py-4 text-sm font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform">Attack</button>
+                            <button
+                              onClick={() => dispatch({ type: "BUILD" })}
+                              className="rounded-xl border border-white/20 bg-white/5 px-4 py-4 text-sm font-bold uppercase tracking-widest active:scale-95 transition-transform"
+                            >
+                              Build
+                            </button>
                             <button onClick={() => dispatch({ type: "SELECT_PASS" })} className="rounded-xl border border-white/20 bg-white/5 px-4 py-4 text-sm font-bold uppercase tracking-widest active:scale-95 transition-transform">Pass</button>
                         </>
                     ) : (
-                        <div className="col-span-2 h-14 flex items-center justify-center">
+                        <div className="col-span-3 h-14 flex items-center justify-center">
                             {state.phase === "ATTACK_DECLARE" && youAreAttacker && (
                                 <button 
                                     disabled={state.selectedAttackIds.length === 0} 

@@ -56,7 +56,7 @@ describe("stateMachine", () => {
 
     expect(next.phase).toBe("SELECT_ACTION");
     expect(next.combatLog[0]).toContain("Invalid action NEXT_TURN");
-    expect(getAllowedActions(next)).toEqual(["SELECT_ATTACK", "SELECT_PASS"]);
+    expect(getAllowedActions(next)).toEqual(["SELECT_ATTACK", "SELECT_PASS", "BUILD"]);
   });
 
   it("invalid action is logged and state unchanged", () => {
